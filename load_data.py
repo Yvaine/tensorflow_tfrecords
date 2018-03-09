@@ -10,10 +10,10 @@ import random
 import matplotlib.patches as patches
 
 # Load training and testing datasets.
-DEPTH_FOLDER = "/Users/jing/Documents/DL/framework/tensorflow/ssd/DSOD-Tensorflow/depth_data/depth/"
-annotation_file = "/Users/jing/Documents/DL/framework/tensorflow/ssd/DSOD-Tensorflow/depth_data/track_annotations/annotation_pos_combine.txt"
-# DEPTH_FOLDER = "./depth_data/depth/"
-# annotation_file = "./depth_data/track_annotations/annotation_pos_combine.txt"
+# DEPTH_FOLDER = "/Users/jing/Documents/DL/framework/tensorflow/ssd/DSOD-Tensorflow/depth_data/depth/"
+# annotation_file = "/Users/jing/Documents/DL/framework/tensorflow/ssd/DSOD-Tensorflow/depth_data/track_annotations/annotation_pos_combine.txt"
+DEPTH_FOLDER = "../test_image/depth_data/depth/"
+annotation_file = "../test_image/depth_data/track_annotations/annotation_pos_combine.txt"
 
 batch_size = 32
 num_epoch = 10
@@ -156,16 +156,20 @@ def process_images(images, mean_value, input_shape, labels):
 
     # display_images_and_labels(resize_images, labels)
     standard_images = np.expand_dims(resize_images, axis=3)
-
-    return standard_images, np.array(standard_label)
+    standard_labels = np.array(standard_label)
+    image_type = standard_images.dtype
+    label_type = standard_labels.dtype
+    print("image_type:", image_type)
+    print("label_type:", label_type)
+    return standard_images, standard_labels, image_type, label_type
 
 def import_data(DEPTH_FOLDER, annotation_file):
     images, labels = load_data(DEPTH_FOLDER, annotation_file)
     # display_images_and_labels(images,labels,True)
     image_mean = calc_mean_value(images)
-    images, labels = process_images(images, image_mean, input_shape, labels)
-    display_images_and_labels(images,labels,False)
-    return images, labels
+    images, labels, image_type, label_type = process_images(images, image_mean, input_shape, labels)
+    # display_images_and_labels(images,labels,False)
+    return images, labels,image_type, label_type
 
 def encode_to_tfrecords(images, labels, tfrecord_filename):
     if os.path.exists(tfrecord_filename):
@@ -173,13 +177,13 @@ def encode_to_tfrecords(images, labels, tfrecord_filename):
     writer = tf.python_io.TFRecordWriter(tfrecord_filename)
 
     for image, label in zip(images, labels):
-        image.astype(IMAGE_TYPE_NP)
+        # image.astype(IMAGE_TYPE_NP)
         image_raw = image.tostring()
-        print("assert:",image.shape)
-        print("assert:",label, label.shape)
-        assert(image.shape==(IMAGE_SHAPE,IMAGE_SHAPE,IMAGE_CHANNEL))
-        assert(label.shape==(LABLE_LEN,))
-        label.astype(LABLE_TYPE_NP)
+        # print("assert:",image.shape)
+        # print("assert:",label, label.shape)
+        # assert(image.shape==(IMAGE_SHAPE,IMAGE_SHAPE,IMAGE_CHANNEL))
+        # assert(label.shape==(LABLE_LEN,))
+        # label.astype(LABLE_TYPE_NP)
         label_raw = label.tostring()
 
         example = tf.train.Example(
@@ -196,7 +200,7 @@ def encode_to_tfrecords(images, labels, tfrecord_filename):
     print ('writer DOWN!')
     writer.close()
 
-def decode_from_tfrecords(tfrecord_filename,is_batch, batch_size):
+def decode_from_tfrecords(tfrecord_filename,is_batch, batch_size, image_type, label_type):
     # output file name string to a queue
     filename_queue = tf.train.string_input_producer([tfrecord_filename], num_epochs=None)
     # create a reader from file queue，建立一个阅读器
@@ -207,15 +211,14 @@ def decode_from_tfrecords(tfrecord_filename,is_batch, batch_size):
                                        features={
                                            'image': tf.FixedLenFeature([], tf.string),
                                            'label': tf.FixedLenFeature([], tf.string)
-                                           # 'label': tf.FixedLenFeature([], tf.int64)
                                        }
                                        )
     image_out = features['image']
     label_out = features['label']
-    image = tf.decode_raw(image_out, IMAGE_TYPE_TF)
+    image = tf.decode_raw(image_out, image_type)
     image = tf.reshape(image, [IMAGE_SHAPE,IMAGE_SHAPE,IMAGE_CHANNEL])
 
-    label = tf.decode_raw(label_out, LABLE_TYPE_TF)
+    label = tf.decode_raw(label_out, label_type)
     label = tf.reshape(label, [LABLE_LEN,])
     # label = tf.cast(features['label'], LABLE_TYPE_TF)
 
@@ -279,12 +282,12 @@ def main2():
     print("image_ds shape:", image_ds)
 
 def main3():
-    images, labels = import_data(DEPTH_FOLDER, annotation_file)
+    images, labels, image_type, label_type = import_data(DEPTH_FOLDER, annotation_file)
     # print("images shape:", images.shape)
 
     tf_records = "depth.records"
-    # encode_to_tfrecords(images,labels,tf_records)
-    image, label = decode_from_tfrecords(tf_records,True,batch_size)
+    encode_to_tfrecords(images,labels,tf_records)
+    image, label = decode_from_tfrecords(tf_records,True,batch_size,image_type, label_type)
 
     init = tf.global_variables_initializer()
 
@@ -311,11 +314,6 @@ def main3():
                         fill=False  # remove background
                     )
                 )
-                # plt.rectangle(label_batch[num][0] * IMAGE_SHAPE - label_batch[num][2] * IMAGE_SHAPE / 2,
-                #               label_batch[num][1] * IMAGE_SHAPE - label_batch[num][3] * IMAGE_SHAPE / 2,
-                #               label_batch[num][2] * IMAGE_SHAPE,
-                #               label_batch[num][3] * IMAGE_SHAPE
-                #               )
                 plt.imshow(image_batch[num, :, :, 0])
                 plt.show()
 
